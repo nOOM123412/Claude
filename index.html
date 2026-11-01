@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Claude Web</title>
-    <!-- Подключаем PyScript -->
-    <link rel="stylesheet" href="https://pyscript.net/releases/2025.5.1/core.css">
-    <script type="module" src="https://pyscript.net/releases/2025.5.1/core.js"></script>
     <style>
         body {
             background-color: #1A1A1A;
@@ -21,14 +18,33 @@
         }
         #header {
             font-family: 'Georgia', serif;
-            font-size: 24px;
+            font-size: 22px;
             font-weight: bold;
             color: #ECECEC;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
         }
+        .header-left { display: flex; align-items: center; }
+        .header-sub { font-size: 14px; color: #888; font-family: Helvetica; margin-left: 10px; }
+        
+        /* Стили для робота в правом верхнем углу */
+        .claude-robot {
+            width: 40px;
+            height: 40px;
+            color: #D97757;
+            /* Плавное покачивание для "живости" */
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+            100% { transform: translateY(0px); }
+        }
+
         #chat-container {
             flex: 1;
             background-color: #1A1A1A;
@@ -42,28 +58,27 @@
             gap: 15px;
         }
         .message {
-            max-width: 80%;
+            max-width: 85%;
             line-height: 1.5;
             white-space: pre-wrap;
+            word-wrap: break-word;
         }
         .user-msg {
             align-self: flex-end;
             text-align: right;
             color: #ECECEC;
+            background-color: #2C2C2C;
+            padding: 10px 15px;
+            border-radius: 8px;
         }
         .ai-msg {
             align-self: flex-start;
             text-align: left;
             color: #ECECEC;
-            background-color: #2C2C2C;
-            padding: 10px 15px;
-            border-radius: 8px;
         }
         .ai-title { color: #D97757; font-weight: bold; font-size: 14px; margin-bottom: 4px; }
-        #input-area {
-            display: flex;
-            gap: 10px;
-        }
+        
+        .controls { display: flex; gap: 10px; align-items: center; }
         #user-input {
             flex: 1;
             background-color: #2C2C2C;
@@ -72,7 +87,7 @@
             padding: 12px;
             border-radius: 8px;
             font-family: 'Helvetica', sans-serif;
-            font-size: 16px;
+            font-size: 15px;
             resize: none;
             height: 50px;
         }
@@ -85,148 +100,201 @@
             border-radius: 8px;
             font-weight: bold;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 15px;
+            transition: 0.2s;
         }
+        button:hover { background-color: #E88B6B; }
         button:disabled { background-color: #383838; color: #888; cursor: not-allowed; }
-        #status { color: #888; font-size: 12px; margin-top: 5px; text-align: center; }
+        .btn-gray { background-color: #333; color: #ECECEC; }
+        .btn-gray:hover { background-color: #444; }
+        #status { color: #888; font-size: 12px; margin-top: 5px; text-align: center; min-height: 18px; }
+        
+        .file-label {
+            background-color: #333;
+            color: #ECECEC;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            display: inline-block;
+            transition: 0.2s;
+        }
+        .file-label:hover { background-color: #444; }
+        #file-input { display: none; }
     </style>
 </head>
 <body>
 
     <div id="header">
-        <span>Claude <span style="font-size: 14px; color: #888; font-family: Helvetica;">Opus 5.5</span></span>
+        <div class="header-left">
+            Claude <span class="header-sub">Claude 3.5 Sonnet</span>
+        </div>
+        
+        <!-- РОБОТ (SVG-иконка) -->
+        <svg class="claude-robot" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="8" width="16" height="12" rx="4" fill="currentColor"/>
+            <rect x="7" y="11" width="2" height="2" fill="#1A1A1A"/>
+            <rect x="15" y="11" width="2" height="2" fill="#1A1A1A"/>
+            <path d="M9 15H15" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round"/>
+            <path d="M12 4V8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M8 16V20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M12 16V20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M16 16V20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
     </div>
 
     <div id="chat-container"></div>
     
-    <div id="input-area">
-        <textarea id="user-input" placeholder="Напишите сообщение... (Enter - отправить)"></textarea>
-        <button id="send-btn" py-click="send_message">Отправить</button>
+    <div class="controls">
+        <textarea id="user-input" placeholder="Напишите сообщение... (Enter - отправить, Shift+Enter - перенос строки)"></textarea>
+        
+        <label for="file-input" class="file-label">📎 Прикрепить</label>
+        <input type="file" id="file-input" accept="image/*">
+        
+        <button id="send-btn" onclick="sendMessage()">Отправить</button>
     </div>
     <div id="status"></div>
 
-    <py-config>
-        packages = ["pyodide-http"]
-    </py-config>
-
-    <py-script>
-        import asyncio
-        import json
-        from js import document, window
-        from pyscript import fetch
-        from pyodide.ffi import create_proxy
-
-        API_KEY = "sk-cvc-8613eb8512ef6b9e9a6c7215bd14bd813c9edd61efa3feca269e6fa7bc47cd54"
-        BASE_URL = "https://api.aikeysforyou.com/v1"
-        MODEL = "deepseek-v4-flash"
+    <script>
+        const API_KEY = "sk-cvc-8613eb8512ef6b9e9a6c7215bd14bd813c9edd61efa3feca269e6fa7bc47cd54";
+        const BASE_URL = "https://api.aikeysforyou.com/v1";
+        const MODEL = "deepseek-v4-flash";
         
-        chat_history = []
-        chat_container = document.getElementById("chat-container")
-        user_input = document.getElementById("user-input")
-        send_btn = document.getElementById("send-btn")
-        status_div = document.getElementById("status")
+        let currentImageB64 = null;
+        
+        const chatContainer = document.getElementById("chat-container");
+        const userInput = document.getElementById("user-input");
+        const sendBtn = document.getElementById("send-btn");
+        const statusDiv = document.getElementById("status");
+        const fileInput = document.getElementById("file-input");
+        const clearBtn = document.getElementById("clear-btn");
 
-        def add_message(role, text):
-            div = document.createElement("div")
-            div.className = f"message {'user-msg' if role == 'user' else 'ai-msg'}"
-            if role == 'assistant':
-                title = document.createElement("div")
-                title.className = "ai-title"
-                title.innerText = "Claude"
-                div.appendChild(title)
+        function addMessage(role, text) {
+            const div = document.createElement("div");
+            div.className = `message ${role === 'user' ? 'user-msg' : 'ai-msg'}`;
             
-            content = document.createElement("div")
-            content.innerText = text
-            div.appendChild(content)
+            if (role === 'assistant') {
+                const title = document.createElement("div");
+                title.className = "ai-title";
+                title.innerText = "Claude";
+                div.appendChild(title);
+            }
             
-            chat_container.appendChild(div)
-            chat_container.scrollTop = chat_container.scrollHeight
-            return content
+            const content = document.createElement("div");
+            content.innerText = text;
+            div.appendChild(content);
+            
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            return content;
+        }
 
-        async def send_message(event=None):
-            # Проверяем, не нажат ли Shift (для переноса строки)
-            if event and event.shiftKey:
-                return
-            
-            text = user_input.value.strip()
-            if not text:
-                return
+        clearBtn.addEventListener("click", () => {
+            currentImageB64 = null;
+            chatContainer.innerHTML = "";
+            statusDiv.innerText = "История очищена";
+        });
 
-            # Очищаем поле и блокируем кнопку
-            user_input.value = ""
-            send_btn.disabled = True
-            status_div.innerText = "Думает..."
+        fileInput.addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
             
-            add_message("user", text)
-            chat_history.append({"role": "user", "content": [{"type": "text", "text": text}]})
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                currentImageB64 = event.target.result.split(",")[1];
+                statusDiv.innerText = "Картинка прикреплена";
+            };
+            reader.readAsDataURL(file);
+        });
 
-            # Создаем пустой блок для ответа
-            ai_content_div = add_message("assistant", "")
+        userInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text && !currentImageB64) return;
+
+            userInput.value = "";
+            sendBtn.disabled = true;
+            statusDiv.innerText = "Думает...";
             
-            try:
-                headers = {
-                    "Authorization": f"Bearer {API_KEY}",
-                    "Content-Type": "application/json"
+            const displayText = text || "Посмотри на картинку.";
+            addMessage("user", displayText);
+            
+            const contentList = [{ "type": "text", "text": displayText }];
+            if (currentImageB64) {
+                contentList.push({ "type": "image_url", "image_url": { "url": `data:image/jpeg;base64,${currentImageB64}` } });
+            }
+            
+            currentImageB64 = null; 
+            fileInput.value = "";
+
+            const aiContentDiv = addMessage("assistant", "");
+            
+            try {
+                const response = await fetch(`${BASE_URL}/chat/completions`, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${API_KEY}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        "model": MODEL,
+                        "messages": [{ "role": "user", "content": contentList }],
+                        "stream": true
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errText = await response.text();
+                    aiContentDiv.innerText = `Ошибка API: ${errText}`;
+                    statusDiv.innerText = "";
+                    sendBtn.disabled = false;
+                    return;
                 }
-                data = {
-                    "model": MODEL,
-                    "messages": chat_history,
-                    "stream": True,
-                    "thinking": {"type": "disabled"}
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+                let fullText = "";
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split("\n");
+                    
+                    for (const line of lines) {
+                        if (line.startsWith("data: ") && line !== "data: [DONE]") {
+                            try {
+                                const parsed = JSON.parse(line.substring(6));
+                                if (parsed.choices && parsed.choices.length > 0) {
+                                    const delta = parsed.choices[0].delta || {};
+                                    const content = delta.content || "";
+                                    if (content) {
+                                        fullText += content;
+                                        aiContentDiv.innerText = fullText;
+                                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                                    }
+                                }
+                            } catch (e) {}
+                        }
+                    }
                 }
                 
-                # PyScript fetch возвращает объект, похожий на JS Response
-                response = await fetch(f"{BASE_URL}/chat/completions", method="POST", headers=headers, body=json.dumps(data))
+                statusDiv.innerText = "";
                 
-                if not response.ok:
-                    error_text = await response.text()
-                    ai_content_div.innerText = f"Ошибка API: {error_text}"
-                    status_div.innerText = ""
-                    send_btn.disabled = False
-                    return
-
-                # Читаем стрим
-                reader = response.body.getReader()
-                decoder = window.TextDecoder.new()
-                full_text = ""
-                
-                while True:
-                    result = await reader.read()
-                    if result.done:
-                        break
-                    chunk = decoder.decode(result.value, {"stream": True})
-                    lines = chunk.split("\n")
-                    for line in lines:
-                        if line.startswith("data: ") and line != "data: [DONE]":
-                            try:
-                                json_str = line[6:]
-                                parsed = json.loads(json_str)
-                                delta = parsed.get("choices", [{}])[0].get("delta", {})
-                                content = delta.get("content", "")
-                                if content:
-                                    full_text += content
-                                    ai_content_div.innerText = full_text
-                                    chat_container.scrollTop = chat_container.scrollHeight
-                            except Exception:
-                                pass
-                
-                chat_history.append({"role": "assistant", "content": full_text})
-                status_div.innerText = ""
-                
-            except Exception as e:
-                ai_content_div.innerText = f"Ошибка сети: {str(e)}"
-                status_div.innerText = "Ошибка"
-            finally:
-                send_btn.disabled = False
-
-        # Привязка Enter к отправке
-        def on_keydown(event):
-            if event.key == "Enter" and not event.shiftKey:
-                event.preventDefault()
-                asyncio.ensure_future(send_message(event))
-
-        proxy = create_proxy(on_keydown)
-        user_input.addEventListener("keydown", proxy)
-    </py-script>
+            } catch (err) {
+                aiContentDiv.innerText = `Ошибка сети (возможно CORS): ${err.message}`;
+                statusDiv.innerText = "Ошибка";
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+    </script>
 </body>
 </html>
